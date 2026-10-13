@@ -1,0 +1,70 @@
+/* ReceiptOwl · design tokens (from Figma "Design tokens" frame) + Gradio resets */
+:root {
+  --owl-amber: #c77b30;
+  --owl-amber-dark: #80501f;
+  --owl-forest: #2f4f3e;
+  --owl-cream: #faf6f0;
+  --owl-white: #ffffff;
+  --owl-bark: #2b2117;
+  --owl-feather: #6b6357;
+  --owl-success: #3f7a4a;
+  --owl-warning: #c99a2e;
+  --owl-warning-dark: #775810;
+  --owl-error: #b3452f;
+
+  --owl-border: #ded8cf;
+  --owl-control-border: #9b9184;
+  --owl-field: #f5f3ef;
+  --owl-disabled: #f0ece5;
+  --owl-track: #e8e3dc;
+  --owl-success-surface: #edf5ed;
+  --owl-warning-surface: #fcedda;
+  --owl-warning-surface-2: #fbf2d9;
+  --owl-error-surface: #fbeeea;
+
+  --owl-radius-control: 6px;
+  --owl-radius-card: 8px;
+  --owl-radius-modal: 10px;
+  --owl-shadow: 0 4px 16px rgba(43, 33, 23, 0.1); /* menus, modals, toasts only */
+
+  --owl-font: -apple-system, BlinkMacSystemFont, "Segoe UI", Roboto, Ubuntu, sans-serif;
+  --owl-mono: "IBM Plex Mono", ui-monospace, SFMono-Regular, Menlo, Consolas, monospace;
+}
+
+/* ---- Gradio resets: let our own layout own the page ---- */
+html, body { background: var(--owl-cream); }
+
+.gradio-container {
+  max-width: none !important;
+  width: 100% !important;
+  padding: 0 !important;
+  margin: 0 !important;
+  background: var(--owl-cream) !important;
+  color: var(--owl-bark);
+  font-family: var(--owl-font) !important;
+  font-size: 13px;
+}
+.gradio-container > .main, .gradio-container .main { padding: 0 !important; gap: 0 !important; max-width: none !important; }
+.gradio-container .wrap, .gradio-container .contain { padding: 0; }
+footer { display: none !important; }
+
+/* Strip the default card chrome from every Gradio block inside the app */
+#owl-app .block,
+#owl-app .form,
+#owl-app .gr-group,
+#owl-app .html-container {
+  background: transparent !important;
+  border: none !important;
+  box-shadow: none !important;
+  padding: 0 !important;
+  border-radius: 0 !important;
+}
+#owl-app .gap, #owl-app .row, #owl-app .column { gap: 0; }
+#owl-app { min-width: 1100px; }
+
+.owl-icon { display: inline-flex; flex: none; align-items: center; justify-content: center; line-height: 0; }
+.owl-icon svg { display: block; }
+.owl-mono { font-family: var(--owl-mono); }
+
+/* One visible focus ring: 2px amber, never colour-only */
+#owl-app :focus-visible { outline: 2px solid var(--owl-amber) !important; outline-offset: 1px; }
