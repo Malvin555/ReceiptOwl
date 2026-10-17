@@ -80,7 +80,6 @@ def _wrap(inner: str, size: int, color: str = "currentColor") -> str:
 
 
 def svg(name: str, size: int = 18, color: str = "currentColor") -> str:
-    """Return inline SVG markup for an icon (exported file wins over fallback)."""
     exported = ICON_DIR / f"{name}.svg"
     if exported.exists():
         markup = exported.read_text(encoding="utf-8").strip()
@@ -91,12 +90,10 @@ def svg(name: str, size: int = 18, color: str = "currentColor") -> str:
 
 
 def icon(name: str, size: int = 18, cls: str = "") -> str:
-    """Inline icon wrapped in a span so CSS can colour it via ``color``."""
     extra = f" {cls}" if cls else ""
     return f'<span class="owl-icon{extra}" style="width:{size}px;height:{size}px">{svg(name, size)}</span>'
 
 
 def data_uri(name: str, color: str = "black") -> str:
-    """URL-encoded data URI of the icon (mask use: black; background use: a hex colour)."""
     markup = svg(name, 18, color=color)
     return "data:image/svg+xml," + urllib.parse.quote(markup, safe="/:=,;()' ")

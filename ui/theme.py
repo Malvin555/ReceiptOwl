@@ -1,5 +1,3 @@
-"""Theme + CSS assembly."""
-
 from __future__ import annotations
 
 from pathlib import Path
@@ -13,7 +11,6 @@ CSS_FILES = ["main.css", "layout.css", "components.css", "tabs.css"]
 
 
 def _icon_mask_css() -> str:
-    """``.owl-ic-<name>::before`` rules so a gr.Button / tab can show a Lucide icon."""
     rules = []
     for name in ICON_NAMES:
         uri = data_uri(name)

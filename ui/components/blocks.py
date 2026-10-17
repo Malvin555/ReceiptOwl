@@ -1,5 +1,3 @@
-"""Reusable HTML builders"""
-
 from __future__ import annotations
 
 from html import escape
@@ -27,21 +25,12 @@ def screen_heading(
     )
 
 
-def local_badge() -> str:
-    return f'<span class="owl-badge">{icon("lock")}<span>Local only</span></span>'
-
-
 def header_left() -> str:
     return (
         '<div class="owl-header-left">'
         f'<span class="owl-logo">{icon("owl", 18)}</span>'
         '<span class="owl-brand">ReceiptOwl</span></div>'
     )
-
-
-def header_status() -> str:
-    """Local-only badge + model-ready dot (green = ready, see Figma model status dots)."""
-    return f'<div class="owl-header-status">{local_badge()}<span class="owl-status-dot" title="Model ready"></span></div>'
 
 
 def progress(pct: float, tone: str = "amber", width: int | None = None) -> str:

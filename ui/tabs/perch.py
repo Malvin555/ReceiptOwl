@@ -1,4 +1,4 @@
-"""Perch: review extracted receipt data before it becomes a report."""
+"""Perch — the receipts table"""
 
 from __future__ import annotations
 
@@ -6,133 +6,317 @@ from html import escape
 
 import gradio as gr
 
-from ui import mock
-from ui.components.blocks import pill, progress, screen_heading
+from config import CONFIDENCE_AMBER, CONFIDENCE_GREEN
+from database import db
+from pipeline.anomalies import flag_label, primary_flag
+from services import receipt_service
+from ui.components.blocks import screen_heading
 from ui.icons import icon
 
 
-def _conf_tone(pct: int) -> str:
-    return "success" if pct >= 85 else "warning" if pct >= 70 else "error"
+def _conf_tone(conf: float) -> str:
+    if conf >= CONFIDENCE_GREEN:
+        return "success"
+    if conf >= CONFIDENCE_AMBER:
+        return "warning"
+    return "error"
 
 
-def _flag_html(flag: str | None) -> str:
-    if flag is None:
-        return "—"
-    glyph = "copy" if flag == "Dupe" else "circle-alert"
-    return f'<span class="owl-flag owl-flag--{flag.lower()}">{icon(glyph)}</span><span class="owl-flag owl-flag--{flag.lower()}">{flag}</span>'
-
-
-def _row(r: dict) -> str:
-    tone = _conf_tone(r["conf"])
-    options = "".join(
-        f"<option{' selected' if c == r['category'] else ''}>{escape(c)}</option>"
-        for c in mock.CATEGORIES
-    )
-    tax = escape(r["tax"]) if r["tax"] else '<span class="owl-tax-missing">—</span>'
-    cls = {"flagged": " owl-row--flagged", "duplicate": " owl-row--duplicate"}.get(
-        r["state"], ""
-    )
-    return (
-        f'<div class="owl-row{cls}">'
-        '<span class="owl-col-check"><input type="checkbox" class="owl-check" aria-label="Select receipt"></span>'
-        f'<span class="owl-col-date">{escape(r["date"])}</span>'
-        f'<span class="owl-col-vendor">{escape(r["vendor"])}</span>'
-        f'<span class="owl-col-amount">{escape(r["amount"])}</span>'
-        f'<span class="owl-col-tax">{tax}</span>'
-        f'<span class="owl-col-cat"><select class="owl-select" aria-label="Category">{options}</select></span>'
-        f'<span class="owl-col-conf">{progress(r["conf"], tone, 48)}'
-        f'<span class="owl-conf-text owl-conf--{tone}">{r["conf"]}%</span></span>'
-        f'<span class="owl-col-flag">{_flag_html(r["flag"])}</span></div>'
-    )
-
-
-def _table() -> str:
-    s = mock.PERCH_SUMMARY
+def _table_html(receipts: list[dict]) -> str:
     head = (
-        '<div class="owl-table-head"><span class="owl-col-check"><input type="checkbox" class="owl-check" aria-label="Select all"></span>'
-        '<span class="owl-col-date">Date</span><span class="owl-col-vendor">Vendor</span>'
-        '<span class="owl-col-amount">Amount</span><span class="owl-col-tax">Tax</span>'
-        '<span class="owl-col-cat">Category</span><span class="owl-col-conf">Confidence</span>'
-        '<span class="owl-col-flag">Flag</span></div>'
+        '<div class="owl-table-head"><span class="owl-col-date">Date</span>'
+        '<span class="owl-col-vendor">Vendor</span><span class="owl-col-amount">Amount</span>'
+        '<span class="owl-col-tax">Tax</span><span class="owl-col-cat">Category</span>'
+        '<span class="owl-col-conf">Confidence</span><span class="owl-col-flag">Flag</span></div>'
     )
-    rows = "".join(_row(r) for r in mock.RECEIPTS)
-    foot = (
-        f'<div class="owl-table-foot"><span>Showing {s["shown"]} of {s["total"]} · scroll for more</span>'
-        "<span>No unsaved changes · USD</span></div>"
-    )
-    return f'<div class="owl-table"><div class="owl-table-scroll">{head}{rows}</div>{foot}</div>'
 
+    if not receipts:
+        body = (
+            '<div class="owl-row">'
+            '<span style="color:var(--owl-feather)">'
+            "No receipts yet — process some in Hunt."
+            "</span></div>"
+        )
+    else:
+        rows = []
 
-def _summary() -> str:
-    s = mock.PERCH_SUMMARY
+        for r in receipts:
+            flag = primary_flag(r.get("flags") or [])
+            row_cls = "owl-row"
+
+            if r.get("is_duplicate"):
+                row_cls += " owl-row--duplicate"
+            elif flag:
+                row_cls += " owl-row--flagged"
+
+            conf = r.get("confidence") or 0
+
+            tax_html = (
+                f"${r['tax']:,.2f}"
+                if r.get("tax") is not None
+                else '<span class="owl-tax-missing">Missing</span>'
+            )
+
+            flag_html = (
+                f'<span class="owl-flag--{flag}">{flag_label(flag)}</span>'
+                if flag
+                else "—"
+            )
+
+            rows.append(
+                f'<div class="{row_cls}">'
+                f'<span class="owl-col-date">'
+                f"{escape(r.get('receipt_date') or '—')}</span>"
+                f'<span class="owl-col-vendor">'
+                f"{escape(r.get('vendor') or 'Unknown')}</span>"
+                f'<span class="owl-col-amount">'
+                f"${(r.get('amount') or 0):,.2f}</span>"
+                f'<span class="owl-col-tax">{tax_html}</span>'
+                f'<span class="owl-col-cat">'
+                f"{escape(r.get('category') or 'Other')}</span>"
+                f'<span class="owl-col-conf">'
+                f'<span class="owl-conf-text owl-conf--{_conf_tone(conf)}">'
+                f"{round(conf)}%</span></span>"
+                f'<span class="owl-col-flag">{flag_html}</span>'
+                "</div>"
+            )
+
+        body = "".join(rows)
+
+    foot = f'<div class="owl-table-foot"><span>{len(receipts)} receipt(s)</span></div>'
+
     return (
-        '<div class="owl-summary">'
-        f'{pill(f"{s["total"]} receipts", "success")}<span class="dot">·</span>'
-        f'{pill(f"{s["flagged"]} flagged", "warning2")}<span class="dot">·</span>'
-        f"{pill(f'{s["dupes"]} dupes', 'neutral', outlined=True)}"
-        '<span class="owl-muted-text" style="margin-left:0">Duplicates are excluded from report totals.</span></div>'
+        f'<div class="owl-table">'
+        f'<div class="owl-table-scroll">{head}{body}</div>'
+        f"</div>{foot}"
     )
 
 
-def build() -> dict:
-    s = mock.PERCH_SUMMARY
-    with gr.Column(elem_classes="owl-screen", visible=False) as screen:
-        with gr.Column(elem_classes="owl-workspace owl-workspace--tight"):
+def _receipt_choices(receipts: list[dict]) -> list[tuple[str, int]]:
+    out = []
+
+    for r in receipts:
+        label = (
+            f"#{r['id']} · {r.get('vendor') or 'Unknown'} · "
+            f"${(r.get('amount') or 0):,.2f}"
+        )
+        out.append((label, r["id"]))
+
+    return out
+
+
+def build(ctx: dict) -> dict:
+    with gr.Column(visible=False, elem_classes=["owl-screen"]) as screen:
+        with gr.Column(elem_classes=["owl-workspace", "owl-workspace--tight"]):
             gr.HTML(
                 screen_heading(
                     "Perch",
-                    "Review the details before they become your reports.",
-                    right=pill(s["period"], "neutral"),
-                    desc_size="15",
+                    "Every receipt, organized and ready for tax season.",
                 )
             )
-            gr.HTML(_summary())
-            with gr.Row(elem_classes="owl-toolbar"):
-                search = gr.Textbox(
-                    placeholder="Search vendors or receipts",
+
+            with gr.Row(elem_classes=["owl-toolbar"]):
+                search_box = gr.Textbox(
+                    placeholder="Search vendor or file name…",
                     show_label=False,
-                    container=False,
-                    elem_classes=["owl-input", "owl-search", "owl-toolbar-search"],
+                    elem_classes=[
+                        "owl-input",
+                        "owl-search",
+                        "owl-toolbar-search",
+                    ],
                 )
-                category = gr.Dropdown(
-                    choices=["All categories"] + mock.CATEGORIES,
+
+                category_filter = gr.Dropdown(
+                    choices=["All categories"],
                     value="All categories",
                     show_label=False,
-                    container=False,
-                    filterable=False,
-                    elem_classes=["owl-input", "owl-toolbar-category"],
+                    elem_classes=[
+                        "owl-input",
+                        "owl-toolbar-category",
+                    ],
                 )
+
                 flagged_only = gr.Checkbox(
                     label="Flagged only",
-                    value=False,
-                    container=False,
-                    elem_classes="owl-toggle",
+                    elem_classes=["owl-toggle"],
                 )
-                save = gr.Button(
-                    "Save changes",
-                    interactive=False,
-                    elem_classes=["owl-btn", "owl-btn-disabled"],
-                )
-            gr.HTML(_table())
-        with gr.Row(elem_classes="owl-actionbar"):
-            export = gr.Button(
-                "Export CSV",
-                elem_classes=["owl-btn", "owl-btn-secondary", "owl-ic-download"],
-            )
-            with gr.Row(elem_classes="owl-actionbar-right"):
+
+            table_html = gr.HTML(_table_html([]))
+
+            # Edit receipt card
+            with gr.Column(
+                scale=0,
+                elem_classes=[
+                    "owl-card",
+                    "owl-card--stack",
+                    "owl-edit-receipt",
+                ],
+            ):
                 gr.HTML(
-                    f'<span class="owl-muted-text">{s["unique"]} unique receipts in reports</span>'
+                    '<span class="owl-card-title owl-edit-title">Edit a receipt</span>'
                 )
-                to_treasure = gr.Button(
-                    "Go to Treasure",
-                    elem_classes=["owl-btn", "owl-btn-primary", "owl-ic-arrow-right"],
-                )
+
+                with gr.Row(elem_classes=["owl-inline-row"]):
+                    receipt_select = gr.Dropdown(
+                        choices=[],
+                        label="Receipt",
+                        elem_classes=["owl-input", "owl-grow"],
+                    )
+
+                    category_select = gr.Dropdown(
+                        choices=[],
+                        label="Category",
+                        elem_classes=["owl-input"],
+                    )
+
+                    save_btn = gr.Button(
+                        "Save",
+                        elem_classes=["owl-btn", "owl-btn-primary"],
+                    )
+
+                    delete_btn = gr.Button(
+                        "Delete",
+                        elem_classes=["owl-btn", "owl-btn-danger"],
+                    )
+
+        with gr.Row(elem_classes=["owl-actionbar"]):
+            gr.HTML('<span class="owl-muted-text" id="perch-status"></span>')
+            gr.HTML("")
+
+    def _load(search="", category="All categories", flagged=False):
+        receipts = receipt_service.list_receipts(
+            search=search,
+            category=category,
+            flagged_only=flagged,
+        )
+
+        cats = ["All categories"] + db.category_names()
+        choices = _receipt_choices(receipts)
+
+        return (
+            _table_html(receipts),
+            gr.update(choices=cats),
+            gr.update(
+                choices=choices,
+                value=(choices[0][1] if choices else None),
+            ),
+            gr.update(choices=db.category_names()),
+        )
+
+    def refresh_filtered(search, category, flagged):
+        receipts = receipt_service.list_receipts(
+            search=search,
+            category=category,
+            flagged_only=flagged,
+        )
+
+        choices = _receipt_choices(receipts)
+
+        return (
+            _table_html(receipts),
+            gr.update(
+                choices=choices,
+                value=(choices[0][1] if choices else None),
+            ),
+        )
+
+    search_box.change(
+        refresh_filtered,
+        inputs=[search_box, category_filter, flagged_only],
+        outputs=[table_html, receipt_select],
+    )
+
+    category_filter.change(
+        refresh_filtered,
+        inputs=[search_box, category_filter, flagged_only],
+        outputs=[table_html, receipt_select],
+    )
+
+    flagged_only.change(
+        refresh_filtered,
+        inputs=[search_box, category_filter, flagged_only],
+        outputs=[table_html, receipt_select],
+    )
+
+    def on_select(receipt_id):
+        if receipt_id is None:
+            return gr.update(value=None)
+
+        r = db.get_receipt(int(receipt_id))
+        return gr.update(value=r["category"] if r else None)
+
+    receipt_select.change(
+        on_select,
+        inputs=receipt_select,
+        outputs=category_select,
+    )
+
+    def on_save(receipt_id, category):
+        if receipt_id is None or not category:
+            gr.Warning("Pick a receipt and a category first.")
+            return gr.update()
+
+        receipt_service.update_receipt_category(
+            int(receipt_id),
+            category,
+        )
+
+        gr.Info("Category updated.")
+        return gr.update()
+
+    def on_delete(receipt_id, search, category, flagged):
+        if receipt_id is None:
+            gr.Warning("Pick a receipt to delete first.")
+            return _table_html([]), gr.update(), gr.update()
+
+        receipt_service.delete_receipt(int(receipt_id))
+
+        gr.Info("Receipt deleted.")
+
+        table, select_update = refresh_filtered(
+            search,
+            category,
+            flagged,
+        )
+
+        return table, select_update, gr.update(value=None)
+
+    save_btn.click(
+        on_save,
+        inputs=[receipt_select, category_select],
+        outputs=category_select,
+    ).then(
+        refresh_filtered,
+        inputs=[search_box, category_filter, flagged_only],
+        outputs=[table_html, receipt_select],
+    )
+
+    delete_btn.click(
+        on_delete,
+        inputs=[
+            receipt_select,
+            search_box,
+            category_filter,
+            flagged_only,
+        ],
+        outputs=[table_html, receipt_select, category_select],
+    )
+
     return {
         "screen": screen,
-        "search": search,
-        "category": category,
+        "load": _load,
+        "load_inputs": [
+            search_box,
+            category_filter,
+            flagged_only,
+        ],
+        "load_outputs": [
+            table_html,
+            category_filter,
+            receipt_select,
+            category_select,
+        ],
+        "search_box": search_box,
+        "category_filter": category_filter,
         "flagged_only": flagged_only,
-        "save": save,
-        "export": export,
-        "to_treasure": to_treasure,
     }

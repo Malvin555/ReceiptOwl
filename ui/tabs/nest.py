@@ -1,75 +1,80 @@
-"""Nest: upload receipts and review the queue before processing."""
+"""Nest — drop receipts in, see the queue, head to Hunt to process them."""
 
 from __future__ import annotations
 
-from html import escape
-
 import gradio as gr
 
-from config import SUPPORTED_FILE_TYPES
-from ui import mock
+from pipeline.intake import format_size, preview
 from ui.components.blocks import screen_heading
 from ui.icons import icon
 
+MAX_FILE_MB = 20
 
-def _queue_html() -> str:
-    s = mock.QUEUE_SUMMARY
-    rows = "".join(
-        f'<div class="owl-queue-row">{icon("file-text" if r["kind"] == "pdf" else "image")}'
-        f'<span class="owl-queue-name">{escape(r["name"])}</span>'
-        f'<span class="owl-queue-meta">{escape(r["meta"])}</span>'
-        f'<span class="owl-queue-x" title="Remove">{icon("x")}</span></div>'
-        for r in mock.QUEUE_PREVIEW
-    )
+
+def _queue_html(files) -> str:
+    items = preview(files)
+    if not items:
+        return '<div class="owl-queue-head"><span>No files queued yet</span></div>'
+    total = sum(i["size_bytes"] for i in items)
     return (
-        '<div class="owl-queue">'
-        '<div class="owl-queue-head">'
-        f"<strong>File queue · {s['count']} receipts</strong>"
-        f"<span>{s['pdfs']} PDFs · {s['images']} images · {s['size']}</span></div>"
-        f'<div class="owl-queue-list">{rows}'
-        '<div class="owl-queue-more">'
-        f"<span>{mock.QUEUE_MORE} more files in this batch</span>"
-        '<span class="owl-link">Show all files ↓</span></div></div></div>'
+        f'<div class="owl-queue-head"><span><strong>{len(items)}</strong> file(s) queued</span>'
+        f"<span>{format_size(total)} total</span></div>"
     )
 
 
-def _dropzone_overlay() -> str:
-    return (
-        '<div class="owl-dropzone-overlay">'
-        f'<span class="owl-dropzone-mark">{icon("owl", 28)}</span>'
-        '<span class="owl-dropzone-main">Drop receipts here, or browse files</span>'
-        '<span class="owl-dropzone-types">PDF, JPG, PNG</span>'
-        '<span class="owl-dropzone-note">Files stay on this laptop</span></div>'
-    )
-
-
-def build() -> dict:
-    with gr.Column(elem_classes="owl-screen", visible=True) as screen:
-        with gr.Column(elem_classes="owl-workspace"):
+def build(ctx: dict) -> dict:
+    with gr.Column(visible=True, elem_classes=["owl-screen"]) as screen:
+        with gr.Column(elem_classes=["owl-workspace"]):
             gr.HTML(
                 screen_heading(
-                    "Drop receipts into the nest",
-                    "Upload receipts and prepare them for processing.",
+                    "Nest",
+                    "Drop receipts in — PDFs, JPGs or PNGs. They stay on this machine.",
                 )
             )
-            with gr.Column(elem_classes="owl-dropzone-wrap"):
-                files = gr.File(
-                    file_count="multiple",
-                    file_types=SUPPORTED_FILE_TYPES,
-                    show_label=False,
-                    container=False,
-                    elem_classes="owl-dropzone",
+            with gr.Column(scale=0, elem_classes=["owl-card"]):
+                with gr.Column(elem_classes=["owl-dropzone-wrap"]):
+                    uploader = gr.File(
+                        file_count="multiple",
+                        file_types=[".pdf", ".jpg", ".jpeg", ".png"],
+                        elem_classes=["owl-dropzone"],
+                        label="",
+                        show_label=False,
+                    )
+                    gr.HTML(
+                        '<div class="owl-dropzone-overlay-block"><div class="owl-dropzone-overlay">'
+                        f'<span class="owl-dropzone-mark">{icon("home", 22)}</span>'
+                        '<div class="owl-dropzone-main">Drop receipts here or <span class="owl-link">browse</span></div>'
+                        '<div class="owl-dropzone-types">PDF, JPG or PNG</div>'
+                        f'<div class="owl-dropzone-note">Up to {MAX_FILE_MB} MB per file · processed entirely offline</div>'
+                        "</div></div>"
+                    )
+                queue_html = gr.HTML(_queue_html(None))
+
+        with gr.Row(elem_classes=["owl-actionbar"]):
+            gr.HTML('<span class="owl-muted-text">Nothing leaves this computer.</span>')
+            with gr.Row(elem_classes=["owl-actionbar-right"]):
+                clear_btn = gr.Button(
+                    "Clear queue", elem_classes=["owl-btn", "owl-btn-secondary"]
                 )
-                gr.HTML(_dropzone_overlay(), elem_classes="owl-dropzone-overlay-block")
-            gr.HTML(_queue_html())
-        with gr.Row(elem_classes="owl-actionbar"):
-            clear = gr.Button("Clear all", elem_classes=["owl-btn", "owl-btn-ghost"])
-            with gr.Row(elem_classes="owl-actionbar-right"):
-                gr.HTML(
-                    f'<span class="owl-muted-text">ETA · {mock.QUEUE_SUMMARY["eta"]}</span>'
+                start_btn = gr.Button(
+                    "Start hunting →",
+                    elem_classes=["owl-btn", "owl-btn-primary"],
+                    interactive=False,
                 )
-                start = gr.Button(
-                    f"Start processing ({mock.QUEUE_SUMMARY['count']})",
-                    elem_classes=["owl-btn", "owl-btn-primary", "owl-ic-play"],
-                )
-    return {"screen": screen, "files": files, "clear": clear, "start": start}
+
+    def on_change(files):
+        has_files = bool(files)
+        return _queue_html(files), gr.update(interactive=has_files)
+
+    uploader.change(on_change, inputs=uploader, outputs=[queue_html, start_btn])
+    clear_btn.click(
+        lambda: (None, _queue_html(None), gr.update(interactive=False)),
+        outputs=[uploader, queue_html, start_btn],
+    )
+
+    return {
+        "screen": screen,
+        "uploader": uploader,
+        "start_btn": start_btn,
+        "clear_btn": clear_btn,
+    }

@@ -1,70 +1,190 @@
-/* ReceiptOwl · design tokens (from Figma "Design tokens" frame) + Gradio resets */
 :root {
-  --owl-amber: #c77b30;
-  --owl-amber-dark: #80501f;
-  --owl-forest: #2f4f3e;
-  --owl-cream: #faf6f0;
-  --owl-white: #ffffff;
-  --owl-bark: #2b2117;
-  --owl-feather: #6b6357;
-  --owl-success: #3f7a4a;
-  --owl-warning: #c99a2e;
-  --owl-warning-dark: #775810;
-  --owl-error: #b3452f;
+    --owl-amber: #c77b30;
+    --owl-amber-dark: #80501f;
+    --owl-forest: #2f4f3e;
+    --owl-cream: #faf6f0;
+    --owl-white: #ffffff;
+    --owl-bark: #2b2117;
+    --owl-feather: #6b6357;
+    --owl-success: #3f7a4a;
+    --owl-warning: #c99a2e;
+    --owl-warning-dark: #775810;
+    --owl-error: #b3452f;
 
-  --owl-border: #ded8cf;
-  --owl-control-border: #9b9184;
-  --owl-field: #f5f3ef;
-  --owl-disabled: #f0ece5;
-  --owl-track: #e8e3dc;
-  --owl-success-surface: #edf5ed;
-  --owl-warning-surface: #fcedda;
-  --owl-warning-surface-2: #fbf2d9;
-  --owl-error-surface: #fbeeea;
+    --owl-border: #ded8cf;
+    --owl-control-border: #9b9184;
+    --owl-field: #f5f3ef;
+    --owl-disabled: #f0ece5;
+    --owl-track: #e8e3dc;
+    --owl-success-surface: #edf5ed;
+    --owl-warning-surface: #fcedda;
+    --owl-warning-surface-2: #fbf2d9;
+    --owl-error-surface: #fbeeea;
 
-  --owl-radius-control: 6px;
-  --owl-radius-card: 8px;
-  --owl-radius-modal: 10px;
-  --owl-shadow: 0 4px 16px rgba(43, 33, 23, 0.1); /* menus, modals, toasts only */
+    --owl-radius-control: 6px;
+    --owl-radius-card: 8px;
+    --owl-radius-modal: 10px;
+    --owl-shadow: 0 4px 16px rgba(43, 33, 23, 0.1);
 
-  --owl-font: -apple-system, BlinkMacSystemFont, "Segoe UI", Roboto, Ubuntu, sans-serif;
-  --owl-mono: "IBM Plex Mono", ui-monospace, SFMono-Regular, Menlo, Consolas, monospace;
+    --owl-font:
+        -apple-system, BlinkMacSystemFont, "Segoe UI", Roboto, Ubuntu,
+        sans-serif;
+    --owl-mono:
+        "IBM Plex Mono", ui-monospace, SFMono-Regular, Menlo, Consolas,
+        monospace;
 }
 
-/* ---- Gradio resets: let our own layout own the page ---- */
-html, body { background: var(--owl-cream); }
+html,
+body {
+    background: var(--owl-cream);
+}
 
 .gradio-container {
-  max-width: none !important;
-  width: 100% !important;
-  padding: 0 !important;
-  margin: 0 !important;
-  background: var(--owl-cream) !important;
-  color: var(--owl-bark);
-  font-family: var(--owl-font) !important;
-  font-size: 13px;
+    max-width: none !important;
+    width: 100% !important;
+    padding: 0 !important;
+    margin: 0 !important;
+    background: var(--owl-cream) !important;
+    color: var(--owl-bark);
+    font-family: var(--owl-font) !important;
+    font-size: 13px;
 }
-.gradio-container > .main, .gradio-container .main { padding: 0 !important; gap: 0 !important; max-width: none !important; }
-.gradio-container .wrap, .gradio-container .contain { padding: 0; }
-footer { display: none !important; }
+.gradio-container > .main,
+.gradio-container .main {
+    padding: 0 !important;
+    gap: 0 !important;
+    max-width: none !important;
+}
+.gradio-container .wrap,
+.gradio-container .contain {
+    padding: 0;
+}
+footer {
+    display: none !important;
+}
 
-/* Strip the default card chrome from every Gradio block inside the app */
 #owl-app .block,
 #owl-app .form,
 #owl-app .gr-group,
 #owl-app .html-container {
-  background: transparent !important;
-  border: none !important;
-  box-shadow: none !important;
-  padding: 0 !important;
-  border-radius: 0 !important;
+    background: transparent !important;
+    border: none !important;
+    box-shadow: none !important;
+    padding: 0 !important;
+    border-radius: 0 !important;
 }
-#owl-app .gap, #owl-app .row, #owl-app .column { gap: 0; }
-#owl-app { min-width: 1100px; }
+#owl-app .gap,
+#owl-app .row,
+#owl-app .column {
+    gap: 0;
+}
+#owl-app {
+    min-width: 1100px;
+}
 
-.owl-icon { display: inline-flex; flex: none; align-items: center; justify-content: center; line-height: 0; }
-.owl-icon svg { display: block; }
-.owl-mono { font-family: var(--owl-mono); }
+.owl-icon {
+    display: inline-flex;
+    flex: none;
+    align-items: center;
+    justify-content: center;
+    line-height: 0;
+}
+.owl-icon svg {
+    display: block;
+}
+.owl-mono {
+    font-family: var(--owl-mono);
+}
 
-/* One visible focus ring: 2px amber, never colour-only */
-#owl-app :focus-visible { outline: 2px solid var(--owl-amber) !important; outline-offset: 1px; }
+html {
+    color-scheme: light;
+}
+
+#owl-app,
+#owl-app * {
+    --accordion-text-color: #27272a !important;
+    --background-fill-primary: white !important;
+    --background-fill-secondary: #fafafa !important;
+    --block-background-fill: white !important;
+    --block-border-color: #e4e4e7 !important;
+    --block-label-background-fill: white !important;
+    --block-label-border-color: #e4e4e7 !important;
+    --block-label-text-color: #71717a !important;
+    --block-title-text-color: #71717a !important;
+    --body-background-fill: white !important;
+    --body-text-color: #27272a !important;
+    --border-color-accent: #93c5fd !important;
+    --border-color-accent-subdued: #93c5fd !important;
+    --border-color-primary: #e4e4e7 !important;
+    --button-cancel-background-fill: #e4e4e7 !important;
+    --button-cancel-background-fill-hover: #d4d4d8 !important;
+    --button-cancel-border-color: #e4e4e7 !important;
+    --button-cancel-border-color-hover: #e4e4e7 !important;
+    --button-cancel-text-color: black !important;
+    --button-cancel-text-color-hover: black !important;
+    --button-primary-background-fill: #3b82f6 !important;
+    --button-primary-background-fill-hover: #2563eb !important;
+    --button-primary-border-color: #3b82f6 !important;
+    --button-secondary-background-fill: #e4e4e7 !important;
+    --button-secondary-background-fill-hover: #d4d4d8 !important;
+    --button-secondary-border-color: #e4e4e7 !important;
+    --button-secondary-border-color-hover: #e4e4e7 !important;
+    --button-secondary-text-color: black !important;
+    --button-secondary-text-color-hover: black !important;
+    --checkbox-background-color: white !important;
+    --checkbox-background-color-focus: white !important;
+    --checkbox-background-color-hover: white !important;
+    --checkbox-border-color: #d4d4d8 !important;
+    --checkbox-border-color-hover: #d4d4d8 !important;
+    --checkbox-label-background-fill: #e4e4e7 !important;
+    --checkbox-label-background-fill-hover: #d4d4d8 !important;
+    --checkbox-label-background-fill-selected: #e4e4e7 !important;
+    --checkbox-label-border-color: #e4e4e7 !important;
+    --checkbox-label-border-color-hover: #e4e4e7 !important;
+    --checkbox-label-border-color-selected: #e4e4e7 !important;
+    --checkbox-label-text-color: #27272a !important;
+    --checkbox-label-text-color-selected: #27272a !important;
+    --code-background-fill: #f4f4f5 !important;
+    --color-accent-soft: #eff6ff !important;
+    --error-background-fill: #fef2f2 !important;
+    --error-border-color: #b91c1c !important;
+    --error-icon-color: #b91c1c !important;
+    --error-text-color: #b91c1c !important;
+    --input-background-fill: #f4f4f5 !important;
+    --input-background-fill-focus: #f4f4f5 !important;
+    --input-background-fill-hover: #f4f4f5 !important;
+    --input-border-color: #e4e4e7 !important;
+    --input-border-color-focus: #93c5fd !important;
+    --input-border-color-hover: #e4e4e7 !important;
+    --input-placeholder-color: #bbbbc2 !important;
+    --link-text-color: #2563eb !important;
+    --link-text-color-active: #2563eb !important;
+    --link-text-color-hover: #1d4ed8 !important;
+    --link-text-color-visited: #3b82f6 !important;
+    --panel-background-fill: #fafafa !important;
+    --panel-border-color: #e4e4e7 !important;
+    --shadow-spread: 3px !important;
+    --stat-background-fill: #93c5fd !important;
+    --table-border-color: #d4d4d8 !important;
+    --table-even-background-fill: white !important;
+    --table-odd-background-fill: #fafafa !important;
+    --table-row-focus: #eff6ff !important;
+    --table-text-color: #27272a !important;
+}
+.gradio-container {
+    color: var(--owl-bark);
+}
+
+#owl-app :focus-visible {
+    outline: 2px solid var(--owl-amber) !important;
+    outline-offset: 1px;
+}
+
+#owl-app .owl-no-relative,
+#owl-app .owl-no-relative.block {
+    position: static !important;
+}
+
+.checkbox-container {
+    padding-left: 10pxlo;
+}

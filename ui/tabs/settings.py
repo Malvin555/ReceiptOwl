@@ -1,144 +1,237 @@
-"""Settings: AI model, storage, categories, danger zone."""
+"""Settings — storage location, model choice, categories, and the Danger Zone reset"""
 
 from __future__ import annotations
 
 from html import escape
+from pathlib import Path
 
 import gradio as gr
 
-from ui import mock
+import config
+from database import db
+from pipeline.extract import _ollama_reachable
+from services import receipt_service
 from ui.components.blocks import screen_heading
+from ui.components.modal import build_confirm_modal, hide, show
 from ui.icons import icon
 
 
-def _card_head(title: str, meta: str, sub: str = "") -> str:
-    sub_html = f'<p class="owl-card-sub">{escape(sub)}</p>' if sub else ""
-    return (
-        f'<div><div class="owl-card-head"><h3 class="owl-card-title">{escape(title)}</h3>'
-        f'<span class="meta">{escape(meta)}</span></div>{sub_html}</div>'
+def _category_rows_html() -> str:
+    cats = db.list_categories()
+    head = '<div class="owl-cat-head"><span>Category</span><span class="owl-cat-default">Tax-deductible</span></div>'
+    rows = []
+    for c in cats:
+        badge = (
+            '<span class="owl-pill owl-pill--success">Deductible</span>'
+            if c["deductible_default"]
+            else '<span class="owl-pill owl-pill--neutral">Not deductible</span>'
+        )
+        rows.append(
+            f'<div class="owl-cat-row"><span class="owl-cat-name">{escape(c["name"])}</span>'
+            f'<span class="owl-cat-default">{badge}</span></div>'
+        )
+    return f'<div class="owl-cat-table">{head}{"".join(rows)}</div>'
+
+
+def _model_status_html(model: str) -> str:
+    reachable = _ollama_reachable()
+    text = (
+        f"Using local Ollama ({model})"
+        if reachable
+        else "Ollama not reachable — using the offline heuristic extractor"
     )
+    ic = "circle-check" if reachable else "circle-alert"
+    return f'<div class="owl-model-status">{icon(ic, 16)}<span>{text}</span></div>'
 
 
-def _categories() -> str:
-    rows = "".join(
-        f'<div class="owl-cat-row"><span class="owl-cat-name">{escape(name)}</span>'
-        f'<span class="owl-cat-edit" title="Rename">{icon("pencil")}</span>'
-        f'<span class="owl-cat-default"><input type="checkbox" class="owl-check owl-check--lg"'
-        f'{" checked" if on else ""} aria-label="Deductible by default"></span></div>'
-        for name, on in mock.SETTINGS_CATEGORIES
-    )
-    return (
-        '<div class="owl-cat-table">'
-        '<div class="owl-cat-head"><span>Category name</span><span class="owl-cat-default">Deductible by default</span></div>'
-        f"{rows}</div>"
-    )
-
-
-def build() -> dict:
-    with gr.Column(elem_classes="owl-screen", visible=False) as screen:
-        with gr.Column(elem_classes="owl-workspace owl-workspace--tight"):
+def build(ctx: dict) -> dict:
+    with gr.Column(visible=False, elem_classes=["owl-screen"]) as screen:
+        with gr.Column(elem_classes=["owl-workspace"]):
             gr.HTML(
                 screen_heading(
-                    "Settings", "Configure ReceiptOwl preferences and local storage."
+                    "Settings",
+                    "Storage, model and category preferences — all stored locally.",
                 )
             )
-            with gr.Row(elem_classes="owl-settings-grid"):
-                with gr.Column(elem_classes="owl-settings-left"):
-                    with gr.Column(elem_classes="owl-card owl-card--stack"):
+
+            with gr.Row(elem_classes=["owl-settings-grid"]):
+                with gr.Column(elem_classes=["owl-settings-left"]):
+                    with gr.Column(elem_classes=["owl-card", "owl-card--stack"]):
                         gr.HTML(
-                            _card_head(
-                                "AI Model",
-                                "Runs with Ollama",
-                                "Choose the local model used to read your receipts.",
-                            )
+                            '<span class="owl-card-title">Storage location</span>'
+                            '<p class="owl-card-sub">Where your database, originals and reports live.</p>'
                         )
-                        with gr.Row(elem_classes="owl-inline-row"):
-                            model = gr.Dropdown(
-                                choices=mock.MODELS,
-                                value=mock.MODELS[0],
+                        with gr.Row(elem_classes=["owl-inline-row"]):
+                            storage_box = gr.Textbox(
+                                value=str(config.get_storage_root()),
                                 show_label=False,
-                                container=False,
-                                filterable=False,
                                 elem_classes=["owl-input", "owl-grow"],
                             )
-                            test = gr.Button(
-                                "Test connection",
-                                elem_classes=["owl-btn", "owl-btn-secondary"],
+                            save_storage_btn = gr.Button(
+                                "Save", elem_classes=["owl-btn", "owl-btn-secondary"]
                             )
+
+                    with gr.Column(elem_classes=["owl-card", "owl-card--stack"]):
                         gr.HTML(
-                            '<p class="owl-card-sub">Available: '
-                            + " · ".join(mock.MODELS)
-                            + "</p>"
-                            f'<div class="owl-model-status">{icon("circle-check")}'
-                            "<span>Ollama + Gemma · Ready · localhost:11434</span></div>"
+                            '<span class="owl-card-title">AI model</span>'
+                            '<p class="owl-card-sub">Used for field extraction when a local Ollama server is running.</p>'
                         )
-                    with gr.Column(elem_classes="owl-card owl-card--stack"):
-                        gr.HTML(_card_head("Storage", "Originals and reports"))
-                        with gr.Row(elem_classes="owl-inline-row"):
-                            gr.Textbox(
-                                value=mock.STORAGE_PATH,
-                                interactive=False,
-                                show_label=False,
-                                container=False,
-                                elem_classes=["owl-input", "owl-readonly", "owl-grow"],
-                            )
-                            browse = gr.Button(
-                                "Browse",
-                                elem_classes=[
-                                    "owl-btn",
-                                    "owl-btn-secondary",
-                                    "owl-ic-folder-open",
-                                ],
-                            )
+                        model_dropdown = gr.Dropdown(
+                            choices=config.MODEL_OPTIONS,
+                            value=config.DEFAULT_MODEL,
+                            show_label=False,
+                            elem_classes=["owl-input"],
+                        )
+                        model_status = gr.HTML(_model_status_html(config.DEFAULT_MODEL))
+
+                    with gr.Column(elem_classes=["owl-danger"]):
                         gr.HTML(
-                            '<p class="owl-card-sub">Your workspace stays on this computer.</p>'
+                            '<div><p class="owl-danger-title">Danger Zone</p>'
+                            '<p class="owl-card-sub">Clears every receipt record from the database. '
+                            "Original files already saved to your originals folder are left untouched.</p></div>"
                         )
-                with gr.Column(
-                    elem_classes="owl-card owl-card--stack owl-settings-right"
-                ):
-                    gr.HTML(
-                        _card_head(
-                            "Categories",
-                            f"{len(mock.SETTINGS_CATEGORIES) + len(mock.SETTINGS_HIDDEN)} categories",
-                            "Edit names and set the default deduction for new receipts.",
+                        reset_open_btn = gr.Button(
+                            "Reset workspace",
+                            elem_classes=["owl-btn", "owl-btn-danger"],
                         )
-                    )
-                    gr.HTML(_categories())
-                    gr.HTML(
-                        '<div class="owl-collapsed"><div>'
-                        f'<p class="owl-muted-text" style="margin:0">{len(mock.SETTINGS_HIDDEN)} more categories</p>'
-                        f'<p class="owl-collapsed-names">{escape(", ".join(mock.SETTINGS_HIDDEN))}</p></div>'
-                        f'<span class="owl-showall">Show all {icon("chevron-down")}</span></div>'
-                    )
-                    add_cat = gr.Button(
-                        "Add category",
-                        elem_classes=["owl-btn", "owl-btn-accent", "owl-ic-plus"],
-                    )
-            with gr.Row(elem_classes="owl-danger"):
-                gr.HTML(
-                    '<div><h3 class="owl-danger-title">Danger Zone</h3>'
-                    '<p class="owl-card-sub" style="margin-top:8px">Clear receipt records and generated reports. '
-                    "Your original documents remain untouched.</p></div>"
-                )
-                reset = gr.Button(
-                    "Reset workspace",
-                    elem_classes=["owl-btn", "owl-btn-danger", "owl-ic-trash"],
-                )
-        with gr.Row(elem_classes="owl-actionbar"):
+
+                with gr.Column(elem_classes=["owl-card", "owl-card--stack"]):
+                    gr.HTML('<span class="owl-card-title">Categories</span>')
+                    cat_table = gr.HTML(_category_rows_html())
+                    with gr.Row(elem_classes=["owl-inline-row"]):
+                        cat_select = gr.Dropdown(
+                            choices=db.category_names(),
+                            label="Category",
+                            elem_classes=["owl-input", "owl-grow"],
+                        )
+                        cat_name = gr.Textbox(
+                            label="Name", elem_classes=["owl-input", "owl-grow"]
+                        )
+                        cat_deductible = gr.Checkbox(
+                            label="Deductible", elem_classes=["owl-toggle"]
+                        )
+                    with gr.Row(elem_classes=["owl-inline-row"]):
+                        cat_add_btn = gr.Button(
+                            "Add new", elem_classes=["owl-btn", "owl-btn-secondary"]
+                        )
+                        cat_save_btn = gr.Button(
+                            "Save changes", elem_classes=["owl-btn", "owl-btn-primary"]
+                        )
+                        cat_delete_btn = gr.Button(
+                            "Delete", elem_classes=["owl-btn", "owl-btn-danger"]
+                        )
+
+        with gr.Row(elem_classes=["owl-actionbar"]):
             gr.HTML(
-                '<span class="owl-muted-text">No unsaved changes · preferences stored locally</span>'
+                '<span class="owl-muted-text">All processing and storage stays on this machine.</span>'
             )
-            save = gr.Button(
-                "Save preferences",
-                interactive=False,
-                elem_classes=["owl-btn", "owl-btn-disabled"],
+            gr.HTML("")
+
+    overlay, confirm_btn, cancel_btn = build_confirm_modal(
+        "reset-modal",
+        "Reset workspace?",
+        "This permanently clears every receipt record and regenerated report. "
+        "Original uploaded files stay in your originals folder. This can't be undone.",
+        confirm_label="Reset workspace",
+    )
+
+    # ---- storage ----
+    def save_storage(path_str):
+        try:
+            p = Path(path_str).expanduser()
+            p.mkdir(parents=True, exist_ok=True)
+            config.set_storage_root(p)
+            gr.Info(
+                "Storage location saved. Restart ReceiptOwl for it to take full effect."
             )
+        except OSError as exc:
+            gr.Warning(f"Couldn't use that folder: {exc}")
+
+    save_storage_btn.click(save_storage, inputs=storage_box)
+
+    # ---- model ----
+    model_dropdown.change(
+        lambda m: _model_status_html(m), inputs=model_dropdown, outputs=model_status
+    )
+
+    # ---- categories ----
+    def reload_categories():
+        names = db.category_names()
+        return _category_rows_html(), gr.update(choices=names)
+
+    def on_cat_select(name):
+        if not name:
+            return gr.update(value=""), gr.update(value=False)
+        c = next((c for c in db.list_categories() if c["name"] == name), None)
+        if not c:
+            return gr.update(value=""), gr.update(value=False)
+        return gr.update(value=c["name"]), gr.update(
+            value=bool(c["deductible_default"])
+        )
+
+    cat_select.change(
+        on_cat_select, inputs=cat_select, outputs=[cat_name, cat_deductible]
+    )
+
+    def on_add(name, deductible):
+        try:
+            db.add_category(name, deductible)
+            gr.Info(f'"{name}" added.')
+        except ValueError as exc:
+            gr.Warning(str(exc))
+        return reload_categories()
+
+    def on_save(selected, name, deductible):
+        if not selected:
+            gr.Warning("Pick a category to edit first.")
+            return reload_categories()
+        cat = next((c for c in db.list_categories() if c["name"] == selected), None)
+        if not cat:
+            return reload_categories()
+        try:
+            db.update_category(cat["id"], name, deductible)
+            gr.Info("Category updated.")
+        except ValueError as exc:
+            gr.Warning(str(exc))
+        return reload_categories()
+
+    def on_delete(selected):
+        if not selected:
+            gr.Warning("Pick a category to delete first.")
+            return reload_categories()
+        cat = next((c for c in db.list_categories() if c["name"] == selected), None)
+        if not cat:
+            return reload_categories()
+        try:
+            db.delete_category(cat["id"])
+            gr.Info("Category deleted.")
+        except ValueError as exc:
+            gr.Warning(str(exc))
+        return reload_categories()
+
+    cat_add_btn.click(
+        on_add, inputs=[cat_name, cat_deductible], outputs=[cat_table, cat_select]
+    )
+    cat_save_btn.click(
+        on_save,
+        inputs=[cat_select, cat_name, cat_deductible],
+        outputs=[cat_table, cat_select],
+    )
+    cat_delete_btn.click(on_delete, inputs=cat_select, outputs=[cat_table, cat_select])
+
+    # ---- danger zone / reset modal ----
+    reset_open_btn.click(show, outputs=overlay)
+    cancel_btn.click(hide, outputs=overlay)
+
+    def do_reset():
+        receipt_service.reset_workspace()
+        gr.Info("Workspace reset. All receipt records cleared.")
+        return hide()
+
+    reset_done = confirm_btn.click(do_reset, outputs=overlay)
+
     return {
         "screen": screen,
-        "model": model,
-        "test": test,
-        "browse": browse,
-        "add_category": add_cat,
-        "reset": reset,
-        "save": save,
+        "reset_done_event": reset_done,
+        "reload_categories": reload_categories,
     }
